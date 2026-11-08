@@ -1,26 +1,18 @@
-# Python
+.DS_Store
 __pycache__/
 *.py[cod]
-*.egg-info/
-
-# Virtual environment
-.venv/
-venv/
-
-# Environment variables
 .env
+.env.*
+!.env.example
+!.env.local.example
+.venv/
+node_modules/
+.next/
+.pytest_cache/
 
-# macOS
-.DS_Store
-
-# VS Code
-.vscode/
-
-# PyCharm
-.idea/
-
-# Logs
+# Local-only files
+.vercel/
+*.zip
+*.patch
 *.log
-
-# SQLite
-*.db
+*.tsbuildinfo

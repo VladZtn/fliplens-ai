@@ -2,6 +2,10 @@ services:
   - type: web
     name: fliplens-api
     runtime: python
+    # Free instance: no card needed, sleeps after 15 min idle (~1 min to wake).
+    # Change to a paid plan (e.g. 0.5c-512mb) when you start charging users.
+    plan: free
+    region: frankfurt
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT

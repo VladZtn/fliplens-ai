@@ -90,7 +90,8 @@ def build_next_action(
             ),
         )
 
-    if safe_buy_price is not None and purchase_price > safe_buy_price:
+    # A gap under £1 is rounding, not a reason to haggle.
+    if safe_buy_price is not None and purchase_price - safe_buy_price >= 1:
         gap = round(purchase_price - safe_buy_price, 2)
 
         return NextAction(
@@ -127,7 +128,18 @@ def build_next_action(
             suggested_offer=round(purchase_price, 2),
         )
 
-    if upper_recommendation in {"CONSIDER", "HIGH_RISK", "NEGOTIATE", "VERIFY"}:
+    if upper_recommendation == "HIGH_RISK":
+        return NextAction(
+            code="NEGOTIATE_MARGIN",
+            title="Borderline, try for less",
+            message=(
+                "The return at this price leaves little room for surprises. "
+                "Items on eBay often sell below their asking price, so a lower "
+                "offer gives you a safer margin."
+            ),
+        )
+
+    if upper_recommendation in {"CONSIDER", "NEGOTIATE", "VERIFY"}:
         return NextAction(
             code="REQUEST_DETAILS",
             title="Request more evidence",

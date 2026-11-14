@@ -48,7 +48,8 @@ function sentenceCase(value: string) {
 function verdict(recommendation: string): { label: string; tone: "good" | "maybe" | "bad" } {
   const value = recommendation.trim().toUpperCase();
   if (value === "BUY" || value.includes("STRONG") || value.includes("EXCEPTIONAL")) return { label: "Buy", tone: "good" };
-  if (value === "NEGOTIATE") return { label: "Haggle", tone: "maybe" };
+  // HIGH_RISK is a score of 40-59: profitable but thin, so not an outright pass.
+  if (value === "NEGOTIATE" || value === "HIGH_RISK") return { label: "Haggle", tone: "maybe" };
   if (value === "VERIFY" || value === "VERIFY_DETAILS" || value === "CONSIDER") return { label: "Check", tone: "maybe" };
   return { label: "Pass", tone: "bad" };
 }

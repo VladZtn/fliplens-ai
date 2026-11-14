@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
@@ -83,6 +84,7 @@ async def analyze_deal_image(
             ),
         )
 
+    started = time.perf_counter()
     try:
         listing = await create_ai_provider().analyze_listing(
             title=title,
@@ -98,8 +100,10 @@ async def analyze_deal_image(
         logger.warning("Gemini analysis failed: %s", exc)
         raise HTTPException(status_code=502, detail=AI_UNAVAILABLE) from exc
     listing = apply_listing_guardrails(listing)
+    ai_ms = (time.perf_counter() - started) * 1000
 
     pricing_warning: str | None = None
+    pricing_started = time.perf_counter()
     try:
         market_pricing = await price_listing(listing)
     except (EbayPricingError, ValueError) as exc:
@@ -109,6 +113,9 @@ async def analyze_deal_image(
             limiter.refund(client_id)
             raise HTTPException(status_code=502, detail=PRICING_UNAVAILABLE) from exc
         pricing_warning = "Live market pricing was unavailable, so your own resale estimate was used."
+
+    pricing_ms = (time.perf_counter() - pricing_started) * 1000
+    logger.info("Analysis timing: ai=%.0fms pricing=%.0fms", ai_ms, pricing_ms)
 
     resale_price = (
         market_pricing.estimated_market_price
@@ -173,6 +180,8 @@ async def analyze_deal_image(
     )
 
     response.headers["X-FlipLens-Remaining"] = str(usage.remaining)
+    # Visible in the browser's network tab; shows where the wait comes from.
+    response.headers["Server-Timing"] = f"ai;dur={ai_ms:.0f}, pricing;dur={pricing_ms:.0f}"
 
     return DealAnalysis(
         listing=listing,

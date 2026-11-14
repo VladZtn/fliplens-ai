@@ -115,7 +115,8 @@ def build_next_action(
             ),
         )
 
-    if upper_recommendation == "BUY":
+    # Names produced by calculate_flipscore for scores of 75 and above.
+    if upper_recommendation in {"BUY", "STRONG_BUY", "EXCEPTIONAL_DEAL"}:
         return NextAction(
             code="CONTACT_SELLER",
             title="Contact the seller",
@@ -126,7 +127,7 @@ def build_next_action(
             suggested_offer=round(purchase_price, 2),
         )
 
-    if upper_recommendation in {"CONSIDER", "NEGOTIATE", "VERIFY"}:
+    if upper_recommendation in {"CONSIDER", "HIGH_RISK", "NEGOTIATE", "VERIFY"}:
         return NextAction(
             code="REQUEST_DETAILS",
             title="Request more evidence",

@@ -37,3 +37,17 @@ def test_critical_risk_skips_listing():
         risk_flags=["activation_lock"],
     )
     assert action.code == "SKIP_LISTING"
+
+
+def test_strong_scores_are_not_told_to_skip():
+    # calculate_flipscore names its best results STRONG_BUY and EXCEPTIONAL_DEAL.
+    for recommendation in ("STRONG_BUY", "EXCEPTIONAL_DEAL"):
+        action = build_next_action(
+            recommendation=recommendation,
+            purchase_price=275,
+            safe_buy_price=329,
+            risk_level="NONE",
+            critical_risk=False,
+            risk_flags=[],
+        )
+        assert action.code == "CONTACT_SELLER"

@@ -9,20 +9,59 @@ _ACCESSORY_WORDS = {
 }
 _STOP_WORDS = {"apple", "phone", "smartphone", "used", "new", "unlocked"}
 
+# Words that name a different product tier. "RTX 3060" and "RTX 3060 Ti", or
+# "iPhone 16" and "iPhone 16 Pro", sell at different prices, so these must
+# match exactly in both directions.
+_TIER_WORDS = {
+    "pro", "max", "plus", "mini", "ultra", "ti", "super", "xt", "xtx",
+    "lite", "se", "air",
+}
+
+_CAPACITY = re.compile(r"\b(\d+)\s*(gb|tb|g)\b")
+_CAPACITY_TOKEN = re.compile(r"^(\d+)(gb|tb)$")
+
 
 def _tokens(value: str) -> set[str]:
+    # "12 GB", "12G" and "12GB" are the same thing in listing titles.
+    text = _CAPACITY.sub(
+        lambda match: f"{match.group(1)}{'tb' if match.group(2) == 'tb' else 'gb'}",
+        value.lower(),
+    )
     return {
         token
-        for token in re.findall(r"[a-z0-9]+", value.lower())
+        for token in re.findall(r"[a-z0-9]+", text)
         if len(token) > 1 and token not in _STOP_WORDS
     }
 
 
-def _storage_tokens(value: str) -> set[str]:
-    return set(re.findall(r"\b(?:64|128|256|512|1024)\s*(?:gb|tb)?\b", value.lower()))
+def _capacities(tokens: set[str]) -> tuple[set[str], set[str]]:
+    """Split capacity tokens into memory-sized (<64GB) and storage-sized."""
+    small: set[str] = set()
+    large: set[str] = set()
+    for token in tokens:
+        match = _CAPACITY_TOKEN.match(token)
+        if not match:
+            continue
+        size = int(match.group(1)) * (1024 if match.group(2) == "tb" else 1)
+        (large if size >= 64 else small).add(token)
+    return small, large
+
+
+def _capacity_conflict(target: set[str], title: set[str]) -> bool:
+    for wanted, offered in zip(_capacities(target), _capacities(title)):
+        if wanted and offered and not wanted & offered:
+            return True
+    return False
 
 
 def score_identity(listing: ListingAnalysis, comparable: MarketComparable) -> float:
+    """How likely the comparable is the same product, from 0 to 1.
+
+    Model numbers and capacities ("3060", "12gb", "256gb") decide most of the
+    score. Descriptive words ("GeForce", "Graphics Card", "OC") only add a
+    little, because sellers who write short titles are still selling the same
+    item, and leaving them out pushes the market price up.
+    """
     target = " ".join(filter(None, [listing.brand, listing.product_name, listing.model]))
     target_tokens = _tokens(target)
     title_tokens = _tokens(comparable.title)
@@ -39,21 +78,19 @@ def score_identity(listing: ListingAnalysis, comparable: MarketComparable) -> fl
         ):
             return 0.05
 
-    overlap = len(target_tokens & title_tokens) / len(target_tokens)
-    score = overlap
+    key_tokens = {token for token in target_tokens if any(char.isdigit() for char in token)}
+    word_tokens = target_tokens - key_tokens
 
-    target_storage = _storage_tokens(target)
-    title_storage = _storage_tokens(comparable.title)
-    if target_storage:
-        if target_storage & title_storage:
-            score += 0.12
-        elif title_storage:
-            score -= 0.18
+    word_overlap = len(word_tokens & title_tokens) / len(word_tokens) if word_tokens else 1.0
+    if key_tokens:
+        key_overlap = len(key_tokens & title_tokens) / len(key_tokens)
+        score = key_overlap * 0.7 + word_overlap * 0.3
+    else:
+        score = word_overlap
 
-    model_tokens = _tokens(listing.model or "")
-    if model_tokens:
-        model_overlap = len(model_tokens & title_tokens) / len(model_tokens)
-        score = score * 0.65 + model_overlap * 0.35
+    different_tier = (target_tokens & _TIER_WORDS) != (title_tokens & _TIER_WORDS)
+    if different_tier or _capacity_conflict(target_tokens, title_tokens):
+        score = min(score, 0.3)
 
     if any(word in comparable.title.lower() for word in ("parts", "broken", "replica", "clone")):
         score -= 0.5

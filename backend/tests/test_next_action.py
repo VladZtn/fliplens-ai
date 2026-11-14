@@ -51,3 +51,29 @@ def test_strong_scores_are_not_told_to_skip():
             risk_flags=[],
         )
         assert action.code == "CONTACT_SELLER"
+
+
+def test_penny_gap_above_safe_offer_is_not_a_haggle():
+    action = build_next_action(
+        recommendation="HIGH_RISK",
+        purchase_price=275,
+        safe_buy_price=274.62,
+        risk_level="NONE",
+        critical_risk=False,
+        risk_flags=[],
+    )
+    assert action.code == "NEGOTIATE_MARGIN"
+    assert action.suggested_offer is None
+
+
+def test_real_gap_above_safe_offer_still_suggests_an_offer():
+    action = build_next_action(
+        recommendation="HIGH_RISK",
+        purchase_price=300,
+        safe_buy_price=274.62,
+        risk_level="NONE",
+        critical_risk=False,
+        risk_flags=[],
+    )
+    assert action.code == "NEGOTIATE"
+    assert action.suggested_offer == 274.62

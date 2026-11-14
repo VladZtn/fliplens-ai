@@ -26,6 +26,7 @@ class GeminiAIProvider(AIProvider):
         timeout_seconds: float = 120.0,
         fallback_models: list[str] | None = None,
         max_attempts_per_model: int = 3,
+        thinking_level: str | None = None,
     ) -> None:
         if not api_key.strip():
             raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
@@ -35,6 +36,9 @@ class GeminiAIProvider(AIProvider):
         self.model = model.strip()
         self.timeout_seconds = float(timeout_seconds)
         self.max_attempts_per_model = max(1, int(max_attempts_per_model))
+        # Gemini 3.x thinks at "medium" by default, which adds seconds to a
+        # plain extraction task. Empty keeps the model default.
+        self.thinking_level = (thinking_level or "").strip().lower() or None
         self.fallback_models = [
             item.strip()
             for item in (fallback_models or [])
@@ -92,15 +96,7 @@ class GeminiAIProvider(AIProvider):
 
         for attempt in range(1, self.max_attempts_per_model + 1):
             try:
-                response = await self.client.aio.models.generate_content(
-                    model=model,
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        temperature=0.1,
-                        response_mime_type="application/json",
-                        response_json_schema=ListingAnalysis.model_json_schema(),
-                    ),
-                )
+                response = await self._generate(model=model, contents=contents)
                 return self._parse_response(response)
 
             except errors.APIError as exc:
@@ -135,6 +131,43 @@ class GeminiAIProvider(AIProvider):
             f"Model remained unavailable after {self.max_attempts_per_model} attempts "
             f"({name}): {self._clean_error(last_error)}"
         )
+
+    def _config(self, model: str, *, with_thinking: bool) -> Any:
+        options: dict[str, Any] = {
+            "temperature": 0.1,
+            "response_mime_type": "application/json",
+            "response_json_schema": ListingAnalysis.model_json_schema(),
+        }
+        # thinking_level exists only on Gemini 3.x; 2.5 models reject it.
+        if with_thinking and self.thinking_level and model.startswith("gemini-3"):
+            try:
+                options["thinking_config"] = types.ThinkingConfig(
+                    thinking_level=self.thinking_level
+                )
+            except Exception:  # Older SDK without thinking_level.
+                self.thinking_level = None
+        return types.GenerateContentConfig(**options)
+
+    async def _generate(self, *, model: str, contents: list[Any]) -> Any:
+        config = self._config(model, with_thinking=True)
+        thinking_sent = getattr(config, "thinking_config", None) is not None
+        try:
+            return await self.client.aio.models.generate_content(
+                model=model, contents=contents, config=config
+            )
+        except errors.APIError as exc:
+            # A 400 with the thinking option set most likely means this model
+            # does not accept it: stop sending it and ask again without.
+            if not thinking_sent or int(getattr(exc, "code", 0) or 0) != 400:
+                raise
+            response = await self.client.aio.models.generate_content(
+                model=model,
+                contents=contents,
+                config=self._config(model, with_thinking=False),
+            )
+            # It worked without the option, so the option was the problem.
+            self.thinking_level = None
+            return response
 
     @staticmethod
     def _parse_response(response: Any) -> ListingAnalysis:

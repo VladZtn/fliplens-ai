@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.5-flash"
     gemini_fallback_models: str = "gemini-3.5-flash,gemini-2.5-flash"
     gemini_max_attempts: int = 2
+    # minimal | low | medium | high. Lower is faster. Empty = model default.
+    gemini_thinking_level: str = "low"
 
     ai_timeout_seconds: float = 45.0
 

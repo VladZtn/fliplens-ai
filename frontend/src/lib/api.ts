@@ -122,6 +122,31 @@ export class ApiError extends Error {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
+const MAX_IMAGE_SIDE = 2000;
+const RESIZE_ABOVE_BYTES = 600 * 1024;
+
+// Phone photos are several megabytes. Shrinking them in the browser makes the
+// upload and the AI step faster, and 2000px keeps listing text readable.
+async function shrinkImage(file: File): Promise<File> {
+  if (file.size <= RESIZE_ABOVE_BYTES) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 export async function analyzeDeal(input: AnalyzeDealInput): Promise<DealAnalysis> {
   const form = new FormData();
   form.append("title", input.title);
@@ -130,7 +155,7 @@ export async function analyzeDeal(input: AnalyzeDealInput): Promise<DealAnalysis
   form.append("extra_costs", String(input.extraCosts));
   form.append("sell_platform", input.sellPlatform);
   form.append("description", input.description ?? "");
-  form.append("image", input.image);
+  form.append("image", await shrinkImage(input.image));
 
   const response = await fetch(`${API_URL}/api/v1/deals/analyze-image`, {
     method: "POST",

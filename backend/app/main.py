@@ -18,7 +18,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-FlipLens-Remaining"],
+    expose_headers=["X-FlipLens-Remaining", "Server-Timing"],
 )
 app.include_router(ai_router)
 app.include_router(deals_router)

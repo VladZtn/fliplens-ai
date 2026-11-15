@@ -52,3 +52,18 @@ def test_weighted_model_mismatch_penalty():
     assert result.risk_penalty == 40
     assert result.risk_level == "HIGH"
     assert result.recommendation == "PASS"
+
+
+def test_score_ceiling_keeps_a_great_deal_below_exceptional():
+    uncapped = calculate_flipscore(purchase_price=190, expected_resale_price=324, selling_fees=39, confidence=0.9)
+    capped = calculate_flipscore(purchase_price=190, expected_resale_price=324, selling_fees=39, confidence=0.9, max_score=85)
+    assert uncapped.flip_score > 85
+    assert capped.flip_score == 85
+    assert capped.recommendation == "STRONG_BUY"
+    assert capped.expected_profit == uncapped.expected_profit
+
+
+def test_score_ceiling_does_not_raise_a_weak_deal():
+    weak = calculate_flipscore(purchase_price=240, expected_resale_price=287, selling_fees=35, confidence=0.9, max_score=85)
+    assert weak.flip_score < 40
+    assert weak.recommendation == "PASS"

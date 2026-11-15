@@ -23,7 +23,7 @@ services:
       - key: PRICING_PROVIDER
         value: ebay
       - key: FREE_DAILY_LIMIT
-        value: "5"
+        value: "2"
       - key: TRUSTED_PROXY_HOPS
         value: "1"
       - key: GEMINI_API_KEY

@@ -92,3 +92,36 @@ def test_pricing_failure_falls_back_to_user_estimate(monkeypatch):
     # eBay business fees on a £700 phone are deducted from profit.
     assert body["fees"]["platform"] == "ebay_business"
     assert body["expected_profit"] == round(700 - 500 - body["selling_fees"], 2)
+
+
+def _post_via_cloudflare(client_ip, edge_ip):
+    return client.post(
+        "/api/v1/deals/analyze-image",
+        data={"title": "Apple iPhone 15 Pro 256GB", "purchase_price": "500", "expected_resale_price": "700"},
+        headers={"X-Forwarded-For": f"{client_ip}, {edge_ip}", "CF-Connecting-IP": client_ip},
+    )
+
+
+def test_limit_follows_the_visitor_not_the_cloudflare_edge(monkeypatch):
+    monkeypatch.setenv("FREE_DAILY_LIMIT", "2")
+    get_settings.cache_clear()
+
+    # Same visitor, a different Cloudflare edge address on every request.
+    assert _post_via_cloudflare("81.2.3.4", "104.22.17.40").status_code == 200
+    assert _post_via_cloudflare("81.2.3.4", "172.68.9.11").status_code == 200
+    assert _post_via_cloudflare("81.2.3.4", "162.158.1.7").status_code == 429
+
+    # Another visitor behind the same edge keeps their own allowance.
+    assert _post_via_cloudflare("90.5.6.7", "104.22.17.40").status_code == 200
+
+
+def test_usage_endpoint_sees_the_same_visitor_after_a_refresh(monkeypatch):
+    monkeypatch.setenv("FREE_DAILY_LIMIT", "2")
+    get_settings.cache_clear()
+
+    _post_via_cloudflare("81.2.3.4", "104.22.17.40")
+    body = client.get(
+        "/api/v1/deals/usage",
+        headers={"X-Forwarded-For": "81.2.3.4, 172.68.9.11", "CF-Connecting-IP": "81.2.3.4"},
+    ).json()
+    assert body["remaining"] == 1

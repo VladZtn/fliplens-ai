@@ -53,31 +53,38 @@ async def analyze_deal_image(
     response: Response,
     title: Annotated[str, Form(min_length=3, max_length=300)],
     purchase_price: Annotated[float, Form(gt=0)],
-    image: Annotated[UploadFile, File(description="JPEG, PNG, or WebP image")],
     expected_resale_price: Annotated[float | None, Form(gt=0)] = None,
     description: Annotated[str | None, Form(max_length=5000)] = None,
     extra_costs: Annotated[float, Form(ge=0)] = 0.0,
     sell_platform: Annotated[SellPlatform, Form()] = SellPlatform.EBAY_BUSINESS,
     x_fliplens_pass: Annotated[str | None, Header()] = None,
+    image: Annotated[
+        UploadFile | None, File(description="Optional JPEG, PNG, or WebP image")
+    ] = None,
 ) -> DealAnalysis:
     settings = get_settings()
 
-    content_type = (image.content_type or "").lower()
-    if content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported image type: {content_type or 'unknown'}",
-        )
+    # The photo is optional: many listings shared in forums are text only,
+    # and the title plus description are enough to price them.
+    images: list[tuple[bytes, str]] = []
+    if image is not None and image.filename:
+        content_type = (image.content_type or "").lower()
+        if content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail=f"Unsupported image type: {content_type or 'unknown'}",
+            )
 
-    raw_bytes = await image.read(MAX_IMAGE_BYTES + 1)
-    await image.close()
-    if len(raw_bytes) > MAX_IMAGE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Image must be no larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB",
-        )
-    if not raw_bytes:
-        raise HTTPException(status_code=422, detail="Uploaded image is empty")
+        raw_bytes = await image.read(MAX_IMAGE_BYTES + 1)
+        await image.close()
+        if len(raw_bytes) > MAX_IMAGE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Image must be no larger than {MAX_IMAGE_BYTES // 1024 // 1024} MB",
+            )
+        if not raw_bytes:
+            raise HTTPException(status_code=422, detail="Uploaded image is empty")
+        images.append((raw_bytes, content_type))
 
     # Subscribers skip the allowance; everyone else reserves one free analysis
     # before paid APIs are called.
@@ -107,7 +114,7 @@ async def analyze_deal_image(
         listing = await create_ai_provider().analyze_listing(
             title=title,
             description=description,
-            images=[(raw_bytes, content_type)],
+            images=images,
         )
     except ValueError as exc:
         refund()

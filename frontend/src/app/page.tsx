@@ -97,11 +97,6 @@ export default function Home() {
     setError("");
     setNeedsResale(false);
 
-    if (!image) {
-      setError("Add a listing screenshot or product photo first.");
-      return;
-    }
-
     const purchase = Number(purchasePrice);
     const resale = resalePrice ? Number(resalePrice) : undefined;
     const costs = Number(extraCosts || 0);
@@ -201,6 +196,7 @@ export default function Home() {
                   <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 </span>
                 <strong>Drop a listing photo</strong>
+                <small className="drop-hint">Optional. A screenshot helps confirm the exact model.</small>
                 <span className="button button-light">Choose file</span>
               </span>
             )}

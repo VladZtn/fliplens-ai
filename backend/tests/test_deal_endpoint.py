@@ -43,3 +43,27 @@ def test_deal_image_endpoint_prices_from_market_when_model_unknown():
     body = response.json()
     assert body["pricing_source"] == "mock_market_comps"
     assert body["market_pricing"]["query"].startswith("Apple iPhone 15 Pro")
+
+
+def test_deal_endpoint_accepts_a_listing_without_photo():
+    response = client.post(
+        "/api/v1/deals/analyze-image",
+        data={
+            "title": "Gigabyte RTX 3060 Gaming OC 12GB",
+            "description": "Used, works fine, no box",
+            "purchase_price": "200",
+            "expected_resale_price": "280",
+            "sell_platform": "none",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["expected_profit"] == 80
+
+
+def test_deal_endpoint_still_rejects_a_bad_photo_type():
+    response = client.post(
+        "/api/v1/deals/analyze-image",
+        data={"title": "Gigabyte RTX 3060 12GB", "purchase_price": "200"},
+        files={"image": ("notes.txt", b"hello", "text/plain")},
+    )
+    assert response.status_code == 415

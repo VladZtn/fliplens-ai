@@ -20,6 +20,9 @@ from app.services.usage import UsageStatus, client_id_from_request, limiter
 
 logger = logging.getLogger("fliplens.deals")
 
+# Highest FlipScore while resale prices are asking prices, not sold prices.
+UNVERIFIED_PRICE_SCORE_CAP = 85
+
 router = APIRouter(prefix="/api/v1/deals", tags=["Deals"])
 
 AI_UNAVAILABLE = "AI analysis is temporarily unavailable. Please try again in a minute."
@@ -181,6 +184,9 @@ async def analyze_deal_image(
         selling_fees=fees.total,
         confidence=listing.confidence,
         risk_flags=listing.risk_flags,
+        # Both eBay asking prices and the user's own estimate are unconfirmed by
+        # real sales, so the score stops below the "exceptional" band.
+        max_score=UNVERIFIED_PRICE_SCORE_CAP,
     )
 
     pricing_source = market_pricing.source if market_pricing else "user_estimate"

@@ -50,6 +50,7 @@ def calculate_flipscore(
     confidence: float = 0.5,
     risk_flags: list[str] | None = None,
     risk_count: int | None = None,
+    max_score: int = 100,
 ) -> DealMetrics:
     if purchase_price <= 0:
         raise ValueError("purchase_price must be greater than 0")
@@ -82,6 +83,9 @@ def calculate_flipscore(
     confidence_points = int(round(max(0.0, min(20.0, confidence * 20.0))))
     base_score = min(100, roi_points + margin_points + confidence_points)
     score = int(round(max(0.0, min(100.0, base_score - assessment.total_penalty))))
+    # The caller lowers the ceiling when the resale price is not confirmed by
+    # sold prices, so a strong-looking deal cannot claim near certainty.
+    score = min(score, max(0, int(max_score)))
 
     risk_level = assessment.highest_severity.value if assessment.highest_severity else "NONE"
 

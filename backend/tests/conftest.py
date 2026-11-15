@@ -11,6 +11,8 @@ def use_mock_ai_by_default(monkeypatch):
     monkeypatch.setenv("PRICING_PROVIDER", "mock")
     monkeypatch.setenv("FREE_DAILY_LIMIT", "1000")
     monkeypatch.setenv("TRUSTED_PROXY_HOPS", "1")
+    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
+    monkeypatch.delenv("STRIPE_PRICE_ID", raising=False)
     get_settings.cache_clear()
     limiter.reset()
     clear_pricing_cache()

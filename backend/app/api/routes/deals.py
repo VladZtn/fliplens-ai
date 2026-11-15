@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Request, Response, UploadFile, status
 
 from app.ai import create_ai_provider
 from app.ai.providers.gemini import GeminiProviderError
@@ -11,11 +11,12 @@ from app.config import get_settings
 from app.pricing import price_listing
 from app.pricing.ebay import EbayPricingError
 from app.schemas.deal import DealAnalysis, FeeBreakdown, UsageInfo
+from app.services.billing import has_active_pass
 from app.services.fees import SellPlatform, estimate_selling_fees, max_buy_price
 from app.services.flipscore import calculate_flipscore
 from app.services.listing_guardrails import apply_listing_guardrails
 from app.services.next_action import build_next_action
-from app.services.usage import client_id_from_request, limiter
+from app.services.usage import UsageStatus, client_id_from_request, limiter
 
 logger = logging.getLogger("fliplens.deals")
 
@@ -34,8 +35,13 @@ def _usage_info(limit: int, remaining: int) -> UsageInfo:
 
 
 @router.get("/usage", response_model=UsageInfo)
-def get_usage(request: Request) -> UsageInfo:
+async def get_usage(
+    request: Request,
+    x_fliplens_pass: Annotated[str | None, Header()] = None,
+) -> UsageInfo:
     settings = get_settings()
+    if await has_active_pass(x_fliplens_pass):
+        return _usage_info(0, 0)
     client_id = client_id_from_request(request, settings.trusted_proxy_hops)
     current = limiter.status(client_id, settings.free_daily_limit)
     return _usage_info(current.limit, current.remaining)
@@ -52,6 +58,7 @@ async def analyze_deal_image(
     description: Annotated[str | None, Form(max_length=5000)] = None,
     extra_costs: Annotated[float, Form(ge=0)] = 0.0,
     sell_platform: Annotated[SellPlatform, Form()] = SellPlatform.EBAY_BUSINESS,
+    x_fliplens_pass: Annotated[str | None, Header()] = None,
 ) -> DealAnalysis:
     settings = get_settings()
 
@@ -72,15 +79,26 @@ async def analyze_deal_image(
     if not raw_bytes:
         raise HTTPException(status_code=422, detail="Uploaded image is empty")
 
-    # Reserve one free analysis before calling paid APIs.
+    # Subscribers skip the allowance; everyone else reserves one free analysis
+    # before paid APIs are called.
     client_id = client_id_from_request(request, settings.trusted_proxy_hops)
-    usage = limiter.try_consume(client_id, settings.free_daily_limit)
+    subscribed = await has_active_pass(x_fliplens_pass)
+    usage = (
+        UsageStatus(limit=0, used=0)
+        if subscribed
+        else limiter.try_consume(client_id, settings.free_daily_limit)
+    )
+
+    def refund() -> None:
+        if not subscribed:
+            limiter.refund(client_id)
+
     if usage is None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=(
                 f"You have used all {settings.free_daily_limit} free analyses for today. "
-                "Your allowance resets at midnight UTC."
+                "Your allowance resets at midnight UTC, or subscribe for unlimited checks."
             ),
         )
 
@@ -92,11 +110,11 @@ async def analyze_deal_image(
             images=[(raw_bytes, content_type)],
         )
     except ValueError as exc:
-        limiter.refund(client_id)
+        refund()
         logger.error("AI provider misconfigured: %s", exc)
         raise HTTPException(status_code=500, detail="The analysis service is not configured correctly.") from exc
     except GeminiProviderError as exc:
-        limiter.refund(client_id)
+        refund()
         logger.warning("Gemini analysis failed: %s", exc)
         raise HTTPException(status_code=502, detail=AI_UNAVAILABLE) from exc
     listing = apply_listing_guardrails(listing)
@@ -110,7 +128,7 @@ async def analyze_deal_image(
         logger.warning("Market pricing failed: %s", exc)
         market_pricing = None
         if expected_resale_price is None:
-            limiter.refund(client_id)
+            refund()
             raise HTTPException(status_code=502, detail=PRICING_UNAVAILABLE) from exc
         pricing_warning = "Live market pricing was unavailable, so your own resale estimate was used."
 
@@ -123,7 +141,7 @@ async def analyze_deal_image(
         else expected_resale_price
     )
     if resale_price is None:
-        limiter.refund(client_id)
+        refund()
         raise HTTPException(
             status_code=422,
             detail=(

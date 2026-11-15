@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.ai import router as ai_router
+from app.api.routes.billing import router as billing_router
 from app.api.routes.deals import router as deals_router
 from app.config import get_settings
 from app.schemas.analyze import AnalyzeRequest
@@ -22,6 +23,7 @@ app.add_middleware(
 )
 app.include_router(ai_router)
 app.include_router(deals_router)
+app.include_router(billing_router)
 
 
 @app.get("/")

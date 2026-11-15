@@ -121,6 +121,36 @@ export class ApiError extends Error {
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+const PASS_KEY = "fliplens_pass";
+
+// The subscription pass lives in this browser only; there are no accounts yet.
+function passHeaders(): Record<string, string> {
+  try {
+    const pass = window.localStorage.getItem(PASS_KEY);
+    return pass ? { "X-FlipLens-Pass": pass } : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function startCheckout(): Promise<string> {
+  const response = await fetch(`${API_URL}/api/v1/billing/checkout`, { method: "POST" });
+  if (!response.ok) throw new ApiError("Payments are unavailable right now. Please try again in a minute.", response.status);
+  return ((await response.json()) as { url: string }).url;
+}
+
+// Called when Stripe sends the buyer back with ?session_id=...
+export async function claimPass(sessionId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_URL}/api/v1/billing/pass?session_id=${encodeURIComponent(sessionId)}`);
+    if (!response.ok) return false;
+    const payload = (await response.json()) as { pass: string };
+    window.localStorage.setItem(PASS_KEY, payload.pass);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const MAX_IMAGE_SIDE = 2000;
 const RESIZE_ABOVE_BYTES = 600 * 1024;
@@ -160,6 +190,7 @@ export async function analyzeDeal(input: AnalyzeDealInput): Promise<DealAnalysis
   const response = await fetch(`${API_URL}/api/v1/deals/analyze-image`, {
     method: "POST",
     body: form,
+    headers: passHeaders(),
   });
 
   if (!response.ok) {
@@ -178,7 +209,7 @@ export async function analyzeDeal(input: AnalyzeDealInput): Promise<DealAnalysis
 
 export async function fetchUsage(): Promise<UsageInfo | null> {
   try {
-    const response = await fetch(`${API_URL}/api/v1/deals/usage`);
+    const response = await fetch(`${API_URL}/api/v1/deals/usage`, { headers: passHeaders() });
     if (!response.ok) return null;
     return (await response.json()) as UsageInfo;
   } catch {

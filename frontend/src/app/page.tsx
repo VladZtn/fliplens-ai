@@ -3,7 +3,7 @@
 import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import ResultView from "@/components/ResultView";
 import { exampleResult } from "@/components/exampleResult";
-import { analyzeDeal, ApiError, DealAnalysis, fetchUsage, SELL_PLATFORMS, SellPlatform, UsageInfo } from "@/lib/api";
+import { analyzeDeal, ApiError, claimPass, DealAnalysis, fetchUsage, SELL_PLATFORMS, SellPlatform, startCheckout, UsageInfo } from "@/lib/api";
 
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -23,6 +23,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [needsResale, setNeedsResale] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
   const resaleRef = useRef<HTMLInputElement>(null);
 
   const previewUrl = useMemo(() => (image ? URL.createObjectURL(image) : ""), [image]);
@@ -35,15 +36,35 @@ export default function Home() {
 
   useEffect(() => {
     let active = true;
-    fetchUsage().then((value) => {
+    async function load() {
+      // Back from Stripe Checkout: swap the session for a pass, then tidy the URL.
+      const sessionId = new URLSearchParams(window.location.search).get("session_id");
+      if (sessionId) {
+        const claimed = await claimPass(sessionId);
+        window.history.replaceState(null, "", window.location.pathname);
+        if (active && !claimed) setError("We could not confirm your payment. Reload the page or get in touch.");
+      }
+      const value = await fetchUsage();
       if (!active || !value) return;
       setUsage(value);
       setLimitReached(!value.unlimited && value.remaining <= 0);
-    });
+    }
+    load();
     return () => {
       active = false;
     };
   }, []);
+
+  async function subscribe() {
+    setError("");
+    setCheckingOut(true);
+    try {
+      window.location.assign(await startCheckout());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Payments are unavailable right now.");
+      setCheckingOut(false);
+    }
+  }
 
   function acceptFile(file?: File) {
     setError("");
@@ -138,6 +159,7 @@ export default function Home() {
           <span className="brand-mark">F</span>
           <span>FlipLens</span>
         </a>
+        {usage?.unlimited && <span className="usage-pill"><b>Unlimited</b> checks</span>}
         {usage && !usage.unlimited && (
           <span className={`usage-pill ${limitReached ? "exhausted" : ""}`}>
             <b>{limitReached ? 0 : usage.remaining}</b> free {usage.remaining === 1 ? "check" : "checks"} left today
@@ -218,7 +240,14 @@ export default function Home() {
           <button className="button button-primary" type="submit" disabled={loading || limitReached}>
             {loading ? <><span className="spinner" aria-hidden="true" /> Checking the deal…</> : "Check this deal"}
           </button>
-          {limitReached && <p className="form-note">Free checks reset at midnight UTC.</p>}
+          {limitReached && (
+            <>
+              <button className="button button-primary" type="button" onClick={subscribe} disabled={checkingOut}>
+                {checkingOut ? "Opening checkout…" : "Get unlimited checks"}
+              </button>
+              <p className="form-note">Or wait: free checks reset at midnight UTC.</p>
+            </>
+          )}
         </form>
 
         <div className="main-pane">

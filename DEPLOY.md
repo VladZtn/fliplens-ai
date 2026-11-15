@@ -52,3 +52,14 @@ Multiple origins are comma-separated.
 - iPhone/iPad: Safari → Share → **Add to Home Screen**
 - Android/Chrome: menu → **Install app**
 - macOS Chrome/Edge: install icon in the address bar
+
+## Stripe subscription (optional)
+
+Payments stay off until both Stripe variables are set on Render.
+
+1. In Stripe, in test mode, create a product with a recurring monthly price and copy its price id (`price_...`).
+2. On Render add `STRIPE_SECRET_KEY` (`sk_test_...`), `STRIPE_PRICE_ID` and `FRONTEND_URL` (the Vercel URL, no trailing slash).
+3. Use up the free checks, press "Get unlimited checks" and pay with Stripe's test card `4242 4242 4242 4242`.
+4. After the redirect the header should read "Unlimited checks". Then swap in the live key and live price id.
+
+There are no accounts yet: the subscription is remembered in the browser that paid. Cancelling in Stripe ends access within ten minutes.

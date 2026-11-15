@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     # Number of reverse proxies in front of the app (Railway/Render: 1).
     trusted_proxy_hops: int = 1
 
+    # Stripe subscription that lifts the daily limit. Leave empty to disable.
+    stripe_secret_key: str | None = None
+    stripe_price_id: str | None = None
+    # Where Stripe Checkout sends the buyer back to.
+    frontend_url: str = "http://localhost:3000"
+    # How long a subscription check is remembered before asking Stripe again.
+    pass_cache_seconds: int = 600
+
     cors_origins: str = (
         "http://localhost:3000,"
         "http://127.0.0.1:3000"

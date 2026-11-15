@@ -109,7 +109,7 @@ export type AnalyzeDealInput = {
   extraCosts: number;
   sellPlatform: SellPlatform;
   description?: string;
-  image: File;
+  image?: File | null;
 };
 
 export class ApiError extends Error {
@@ -185,7 +185,7 @@ export async function analyzeDeal(input: AnalyzeDealInput): Promise<DealAnalysis
   form.append("extra_costs", String(input.extraCosts));
   form.append("sell_platform", input.sellPlatform);
   form.append("description", input.description ?? "");
-  form.append("image", await shrinkImage(input.image));
+  if (input.image) form.append("image", await shrinkImage(input.image));
 
   const response = await fetch(`${API_URL}/api/v1/deals/analyze-image`, {
     method: "POST",

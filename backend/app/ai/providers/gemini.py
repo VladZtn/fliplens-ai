@@ -63,7 +63,8 @@ class GeminiAIProvider(AIProvider):
                 "Upload the image directly instead."
             )
 
-        contents: list[Any] = [self._build_prompt(title, description)]
+        has_image = any(raw for raw, _ in images or [])
+        contents: list[Any] = [self._build_prompt(title, description, has_image=has_image)]
         for raw_bytes, mime_type in images or []:
             if raw_bytes:
                 contents.append(
@@ -202,13 +203,19 @@ class GeminiAIProvider(AIProvider):
 
 
     @staticmethod
-    def _build_prompt(title: str, description: str | None) -> str:
+    def _build_prompt(title: str, description: str | None, *, has_image: bool = True) -> str:
         today = date.today().isoformat()
+        source = (
+            "Inspect the title, description, and attached image."
+            if has_image
+            else "No image is attached: work from the title and description only, "
+            "and do not report a missing image as a risk."
+        )
 
         return f"""
     You are FlipLens, a conservative analyst of second-hand marketplace listings.
 
-    Inspect the title, description, and attached image. Extract only facts that are visible or explicitly stated.
+    {source} Extract only facts that are visible or explicitly stated.
 
     GENERAL RULES
 

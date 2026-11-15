@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { DealAnalysis } from "@/lib/api";
+import { cexSearchUrl, checkQuery, ebaySoldUrl } from "@/lib/checkLinks";
 
 const NEUTRAL_IDENTITY_FLAGS = new Set([
   "product_identity_unverified",
@@ -105,6 +106,7 @@ export default function ResultView({ result, onReset, example = false }: Props) 
   const meta = [result.listing.brand, result.listing.variant, result.listing.condition].filter(Boolean).join(", ");
   const fees = result.selling_fees ?? result.fees?.total ?? 0;
   const offer = result.next_action.suggested_offer;
+  const checkTerm = checkQuery(market?.query || result.listing.product_name, result.listing.variant);
   const scoreStyle = { "--score": `${result.flip_score * 3.6}deg` } as CSSProperties;
 
   function toggleCheck(item: string) {
@@ -203,11 +205,21 @@ export default function ResultView({ result, onReset, example = false }: Props) 
               ))}
             </ul>
           )}
-          <p className="small-print">These are asking prices. Items often sell for less, so check sold listings too.</p>
+          <p className="small-print">These are asking prices. Items often sell for less, so check what they actually sold for below.</p>
         </Fold>
       ) : (
         <p className="note">Resale price is your own estimate and was not checked against eBay.</p>
       )}
+
+      <div className="check-links">
+        <span>Check it yourself:</span>
+        <a className="button button-light" href={ebaySoldUrl(checkTerm, market?.condition_filter)} target="_blank" rel="noopener noreferrer">
+          Sold on eBay<span className="visually-hidden"> (opens eBay)</span>
+        </a>
+        <a className="button button-light" href={cexSearchUrl(checkTerm)} target="_blank" rel="noopener noreferrer">
+          CeX price<span className="visually-hidden"> (opens CeX)</span>
+        </a>
+      </div>
 
       {!example && <section className="checks" aria-label="Before you buy">
         <div className="checks-head">

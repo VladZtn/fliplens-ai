@@ -240,6 +240,8 @@ button { cursor: pointer; }
 .small-print { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: #85877f; }
 
 .comps { list-style: none; margin: 0; padding: 0; }
+.check-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+.check-links .button { padding: 8px 14px; font-size: 14px; }
 .comps li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 10px 0; border-bottom: 1px solid #ecede7; font-size: 14px; }
 .comps a, .comps li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); text-decoration: none; }
 .comps a:hover { text-decoration: underline; text-underline-offset: 3px; }

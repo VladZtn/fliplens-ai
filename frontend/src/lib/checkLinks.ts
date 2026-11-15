@@ -17,9 +17,20 @@ export function checkQuery(base: string, variant?: string | null): string {
   return `${query} ${extra}`;
 }
 
+// Words that name a different tier of the same product. "iPhone 16" must not
+// match "iPhone 16 Pro Max", nor "RTX 3060" match "RTX 3060 Ti", so eBay is
+// told to leave out every tier word the query itself does not contain.
+const TIER_WORDS = ["pro", "max", "plus", "mini", "ultra", "ti", "super", "xt", "xtx", "lite", "se"];
+
+export function withoutOtherTiers(query: string): string {
+  const words = new Set(query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const excluded = TIER_WORDS.filter((word) => !words.has(word)).map((word) => `-${word}`);
+  return [query, ...excluded].join(" ");
+}
+
 export function ebaySoldUrl(query: string, condition?: string | null): string {
   const params = new URLSearchParams({
-    _nkw: query,
+    _nkw: withoutOtherTiers(query),
     LH_Sold: "1",
     LH_Complete: "1",
     LH_PrefLoc: "1",

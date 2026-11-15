@@ -74,12 +74,25 @@ class DailyUsageLimiter:
 limiter = DailyUsageLimiter()
 
 
+# Render serves every app through Cloudflare, which overwrites these headers
+# with the visitor's real IP, so a client cannot set them itself.
+_EDGE_IP_HEADERS = ("true-client-ip", "cf-connecting-ip")
+
+
 def client_id_from_request(request: Request, trusted_proxy_hops: int = 1) -> str:
     """Best-effort client IP.
 
-    Railway and Render put the real client IP at the end of X-Forwarded-For.
-    Entries further left can be set by the client, so they are not trusted.
+    On Render, X-Forwarded-For reads "client, Cloudflare edge", and the edge
+    address changes between requests, so it cannot identify a visitor. The
+    Cloudflare headers are used first. Without them (local runs, other hosts)
+    the proxy-appended end of X-Forwarded-For is used; entries further left
+    can be set by the client, so they are not trusted.
     """
+    for header in _EDGE_IP_HEADERS:
+        value = request.headers.get(header, "").strip()
+        if value:
+            return value
+
     forwarded = request.headers.get("x-forwarded-for", "")
     hops = [part.strip() for part in forwarded.split(",") if part.strip()]
     if hops and trusted_proxy_hops > 0:
